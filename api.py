@@ -3,11 +3,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import json
-import os
+from typing import Any, Dict
+from matcher import SchemaMatcher
 
 app = FastAPI()
 
-# Allow UI to call API
+# CORS (open for now; tighten later if needed)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,24 +17,41 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve the UI folder
+# Serve UI from /ui
 app.mount("/ui", StaticFiles(directory="ui"), name="ui")
+
 
 @app.get("/")
 def root():
     return FileResponse("ui/index.html")
 
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
 
+
+# Load matcher + model at startup (L1)
+matcher: SchemaMatcher | None = None
+
+
+@app.on_event("startup")
+def load_model() -> None:
+    global matcher
+    matcher = SchemaMatcher()
+
+
 @app.post("/compare")
-async def compare(file1: UploadFile = File(...), file2: UploadFile = File(...)):
+async def compare(file1: UploadFile = File(...), file2: UploadFile = File(...)) -> Dict[str, Any]:
+    global matcher
+    if matcher is None:
+        matcher = SchemaMatcher()
+
     # Read uploaded file contents
     content1 = await file1.read()
     content2 = await file2.read()
 
-    # Parse JSON inside each file
+    # Parse JSON
     try:
         data1 = json.loads(content1)
     except Exception as e:
@@ -44,11 +62,17 @@ async def compare(file1: UploadFile = File(...), file2: UploadFile = File(...)):
     except Exception as e:
         return {"error": f"File2 is not valid JSON: {str(e)}"}
 
-    # Placeholder comparison logic
-    # Replace with your real matching logic later
-    return {
-        "message": "Files received and parsed successfully",
-        "structured_keys": list(data1.keys()),
-        "unstructured_keys": list(data2.keys())
-    }
+    if not isinstance(data1, dict) or not isinstance(data2, dict):
+        return {"error": "Both files must contain top‑level JSON objects."}
 
+    structured_keys = list(data1.keys())
+    unstructured_keys = list(data2.keys())
+
+    matches = matcher.match(structured_keys, unstructured_keys, top_k=3)
+
+    return {
+        "message": "Schema matching completed",
+        "structured_keys": structured_keys,
+        "unstructured_keys": unstructured_keys,
+        "matches": matches,
+    }
