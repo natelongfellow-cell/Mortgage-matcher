@@ -1,18 +1,36 @@
 <!DOCTYPE html>
-<html>
-<head>
-  <title>Mortgage Matcher</title>
-  <link rel="stylesheet" href="/ui/styles.css">
-</head>
-<body>
-  <h1>Mortgage Matcher</h1>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mortgage Matcher</title>
+    <link rel="stylesheet" href="/ui/styles.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <h1>Mortgage Matcher</h1>
 
-  <input type="file" id="file1">
-  <input type="file" id="file2">
-  <button onclick="compare()">Compare</button>
+      <div class="upload-row">
+        <div class="file-block">
+          <label for="structured-file">Structured JSON</label>
+          <input type="file" id="structured-file" accept=".json" />
+        </div>
+        <div class="file-block">
+          <label for="unstructured-file">Unstructured JSON</label>
+          <input type="file" id="unstructured-file" accept=".json" />
+        </div>
+      </div>
 
-  <pre id="output"></pre>
+      <button id="compare-button">Compare</button>
 
-  <script src="/ui/script.js"></script>
-</body>
+      <div id="loading-indicator" class="loading" style="display:none;">
+        Running schema matcher…
+      </div>
+
+      <pre id="result" class="result-message"></pre>
+
+      <div id="matches-table-container" class="table-container"></div>
+    </div>
+
+    <script src="/ui/script.js" defer></script>
+  </body>
 </html>
