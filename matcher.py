@@ -3,7 +3,6 @@
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from rapidfuzz import fuzz
-import json
 
 def token_similarity(a: str, b: str) -> float:
     if not a or not b:
@@ -24,7 +23,7 @@ def combined_similarity(a: str, b: str) -> float:
 
 def compare_json(structured: dict, unstructured: dict):
     results = []
-    total_score = 0
+    total_score = 0.0
     count = 0
 
     for key, value in structured.items():
