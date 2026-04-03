@@ -7,8 +7,11 @@ import re
 
 class SchemaMatcher:
     def __init__(self):
-        # Load a small, fast semantic model (Render‑safe on free tier)
-        self.model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        # Lightweight model (~22MB) that works on Render Free
+        self.model = SentenceTransformer(
+            "sentence-transformers/paraphrase-MiniLM-L3-v2",
+            device="cpu"
+        )
 
     @staticmethod
     def _normalize_field_name(name: str) -> str:
@@ -30,7 +33,6 @@ class SchemaMatcher:
 
     @staticmethod
     def _fuzzy_ratio(a: str, b: str) -> float:
-        # Simple normalized Levenshtein‑like ratio (no external lib)
         if not a and not b:
             return 1.0
         if not a or not b:
@@ -55,14 +57,12 @@ class SchemaMatcher:
         unstructured_keys: List[str],
         top_k: int = 3,
     ) -> List[Dict[str, Any]]:
-        # Normalize
         s_norm = [self._normalize_field_name(k) for k in structured_keys]
         u_norm = [self._normalize_field_name(k) for k in unstructured_keys]
 
         s_tokens = [self._tokenize(k) for k in s_norm]
         u_tokens = [self._tokenize(k) for k in u_norm]
 
-        # Semantic similarity matrix
         sem_matrix = self._semantic_scores(s_norm, u_norm)
 
         results: List[Dict[str, Any]] = []
@@ -71,12 +71,10 @@ class SchemaMatcher:
             row: List[Tuple[str, float, Dict[str, float]]] = []
 
             for j, u_key in enumerate(unstructured_keys):
-                # Components
                 sem = float(sem_matrix[i, j])
                 jac = self._jaccard(s_tokens[i], u_tokens[j])
                 fuzz = self._fuzzy_ratio(s_norm[i], u_norm[j])
 
-                # Weighted score (tuneable)
                 score = 0.6 * sem + 0.25 * fuzz + 0.15 * jac
 
                 row.append(
@@ -91,7 +89,6 @@ class SchemaMatcher:
                     )
                 )
 
-            # Sort by score desc
             row.sort(key=lambda x: x[1], reverse=True)
             best = row[0] if row else None
             alternatives = row[1:top_k] if len(row) > 1 else []
