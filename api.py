@@ -15,17 +15,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+@app.get("/")
+def root():
+    return {"status": "Mortgage Matcher API running"}
+
 @app.post("/compare")
-async def compare(structured: UploadFile = File(...), unstructured: UploadFile = File(...)):
+async def compare(
+    structured: UploadFile = File(...),
+    unstructured: UploadFile = File(...)
+):
     try:
-        structured_data = json.loads((await structured.read()).decode("utf-8"))
-        unstructured_data = json.loads((await unstructured.read()).decode("utf-8"))
+        structured_bytes = await structured.read()
+        unstructured_bytes = await unstructured.read()
+
+        structured_data = json.loads(structured_bytes.decode("utf-8"))
+        unstructured_data = json.loads(unstructured_bytes.decode("utf-8"))
     except Exception as e:
         return {"error": f"Invalid JSON uploaded: {str(e)}"}
 
     result = compare_json(structured_data, unstructured_data)
     return result
-
-@app.get("/")
-def root():
-    return {"status": "Mortgage Matcher API running"}
