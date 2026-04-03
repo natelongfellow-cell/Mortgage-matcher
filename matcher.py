@@ -1,115 +1,49 @@
-from typing import List, Dict, Any, Tuple
-import numpy as np
-from sentence_transformers import SentenceTransformer
+# matcher.py
+
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
-import re
+from rapidfuzz import fuzz
+import json
 
+def token_similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    return fuzz.token_sort_ratio(a, b) / 100
 
-class SchemaMatcher:
-    def __init__(self):
-        # Lightweight model (~22MB) that works on Render Free
-        self.model = SentenceTransformer(
-            "sentence-transformers/paraphrase-MiniLM-L3-v2",
-            device="cpu"
-        )
+def tfidf_similarity(a: str, b: str) -> float:
+    if not a or not b:
+        return 0.0
+    vectorizer = TfidfVectorizer().fit([a, b])
+    vectors = vectorizer.transform([a, b])
+    return float(cosine_similarity(vectors[0], vectors[1])[0][0])
 
-    @staticmethod
-    def _normalize_field_name(name: str) -> str:
-        name = name.lower().strip()
-        name = re.sub(r"[_\-]+", " ", name)
-        name = re.sub(r"[^a-z0-9\s]", "", name)
-        return name
+def combined_similarity(a: str, b: str) -> float:
+    t = token_similarity(a, b)
+    s = tfidf_similarity(a, b)
+    return round(0.4 * t + 0.6 * s, 4)
 
-    @staticmethod
-    def _tokenize(name: str) -> List[str]:
-        return [t for t in name.split() if t]
+def compare_json(structured: dict, unstructured: dict):
+    results = []
+    total_score = 0
+    count = 0
 
-    @staticmethod
-    def _jaccard(a: List[str], b: List[str]) -> float:
-        sa, sb = set(a), set(b)
-        if not sa and not sb:
-            return 0.0
-        return len(sa & sb) / len(sa | sb)
+    for key, value in structured.items():
+        u_val = unstructured.get(key, "")
+        score = combined_similarity(str(value), str(u_val))
 
-    @staticmethod
-    def _fuzzy_ratio(a: str, b: str) -> float:
-        if not a and not b:
-            return 1.0
-        if not a or not b:
-            return 0.0
-        la, lb = len(a), len(b)
-        max_len = max(la, lb)
-        mismatches = sum(ch1 != ch2 for ch1, ch2 in zip(a.ljust(max_len), b.ljust(max_len)))
-        return 1.0 - (mismatches / max_len)
+        results.append({
+            "field": key,
+            "structured_value": value,
+            "unstructured_value": u_val,
+            "score": score
+        })
 
-    def _semantic_scores(
-        self, structured_fields: List[str], unstructured_fields: List[str]
-    ) -> np.ndarray:
-        all_texts = structured_fields + unstructured_fields
-        embeddings = self.model.encode(all_texts)
-        s_emb = embeddings[: len(structured_fields)]
-        u_emb = embeddings[len(structured_fields) :]
-        return cosine_similarity(s_emb, u_emb)
+        total_score += score
+        count += 1
 
-    def match(
-        self,
-        structured_keys: List[str],
-        unstructured_keys: List[str],
-        top_k: int = 3,
-    ) -> List[Dict[str, Any]]:
-        s_norm = [self._normalize_field_name(k) for k in structured_keys]
-        u_norm = [self._normalize_field_name(k) for k in unstructured_keys]
+    overall = round(total_score / max(count, 1), 4)
 
-        s_tokens = [self._tokenize(k) for k in s_norm]
-        u_tokens = [self._tokenize(k) for k in u_norm]
-
-        sem_matrix = self._semantic_scores(s_norm, u_norm)
-
-        results: List[Dict[str, Any]] = []
-
-        for i, s_key in enumerate(structured_keys):
-            row: List[Tuple[str, float, Dict[str, float]]] = []
-
-            for j, u_key in enumerate(unstructured_keys):
-                sem = float(sem_matrix[i, j])
-                jac = self._jaccard(s_tokens[i], u_tokens[j])
-                fuzz = self._fuzzy_ratio(s_norm[i], u_norm[j])
-
-                score = 0.6 * sem + 0.25 * fuzz + 0.15 * jac
-
-                row.append(
-                    (
-                        u_key,
-                        score,
-                        {
-                            "semantic": sem,
-                            "fuzzy": fuzz,
-                            "token_jaccard": jac,
-                        },
-                    )
-                )
-
-            row.sort(key=lambda x: x[1], reverse=True)
-            best = row[0] if row else None
-            alternatives = row[1:top_k] if len(row) > 1 else []
-
-            results.append(
-                {
-                    "structured_field": s_key,
-                    "best_match": {
-                        "unstructured_field": best[0] if best else None,
-                        "score": best[1] if best else 0.0,
-                        "components": best[2] if best else {},
-                    },
-                    "alternatives": [
-                        {
-                            "unstructured_field": alt[0],
-                            "score": alt[1],
-                            "components": alt[2],
-                        }
-                        for alt in alternatives
-                    ],
-                }
-            )
-
-        return results
+    return {
+        "overall_score": overall,
+        "field_results": results
+    }
