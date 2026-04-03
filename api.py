@@ -8,7 +8,7 @@ from matcher import SchemaMatcher
 
 app = FastAPI()
 
-# CORS (open for now; tighten later if needed)
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -17,7 +17,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve UI from /ui
+# Serve UI
 app.mount("/ui", StaticFiles(directory="ui"), name="ui")
 
 
@@ -31,19 +31,15 @@ def health():
     return {"status": "ok"}
 
 
-# Load matcher + model at startup (L1)
+# Lazy-loaded matcher
 matcher: SchemaMatcher | None = None
-
-
-@app.on_event("startup")
-def load_model() -> None:
-    global matcher
-    matcher = SchemaMatcher()
 
 
 @app.post("/compare")
 async def compare(file1: UploadFile = File(...), file2: UploadFile = File(...)) -> Dict[str, Any]:
     global matcher
+
+    # Lazy load the model here instead of at startup
     if matcher is None:
         matcher = SchemaMatcher()
 
@@ -63,7 +59,7 @@ async def compare(file1: UploadFile = File(...), file2: UploadFile = File(...)) 
         return {"error": f"File2 is not valid JSON: {str(e)}"}
 
     if not isinstance(data1, dict) or not isinstance(data2, dict):
-        return {"error": "Both files must contain top‑level JSON objects."}
+        return {"error": "Both files must contain top-level JSON objects."}
 
     structured_keys = list(data1.keys())
     unstructured_keys = list(data2.keys())
