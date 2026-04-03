@@ -8,7 +8,7 @@ const resultsBodyEl = document.getElementById("results-body");
 
 // CHANGE THIS to your Render URL in production
 // e.g. const API_BASE = "https://mortgage-matcher.onrender.com";
-const API_BASE = "https://mortgage-matcher-1.onrender.com/";
+const API_BASE = "https://mortgage-matcher-1.onrender.com";
 
 form.addEventListener("submit", async (e) => {
   e.preventDefault();
