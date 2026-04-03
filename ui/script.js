@@ -1,148 +1,85 @@
-const structuredInput = document.getElementById("structured-file");
-const unstructuredInput = document.getElementById("unstructured-file");
-const compareButton = document.getElementById("compare-button");
-const resultContainer = document.getElementById("result");
-const tableContainer = document.getElementById("matches-table-container");
-const loadingIndicator = document.getElementById("loading-indicator");
+// script.js
 
-function setLoading(isLoading) {
-  if (isLoading) {
-    loadingIndicator.style.display = "block";
-    compareButton.disabled = true;
-  } else {
-    loadingIndicator.style.display = "none";
-    compareButton.disabled = false;
-  }
-}
+const form = document.getElementById("compare-form");
+const statusEl = document.getElementById("status");
+const resultsEl = document.getElementById("results");
+const overallScoreEl = document.getElementById("overall-score");
+const resultsBodyEl = document.getElementById("results-body");
 
-function confidenceClass(score) {
-  if (score >= 0.8) return "conf-high";
-  if (score >= 0.6) return "conf-med";
-  return "conf-low";
-}
+// CHANGE THIS to your Render URL in production
+// e.g. const API_BASE = "https://mortgage-matcher.onrender.com";
+const API_BASE = "";
 
-function renderMatches(matches) {
-  if (!matches || matches.length === 0) {
-    tableContainer.innerHTML = "<p>No matches found.</p>";
-    return;
-  }
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  statusEl.textContent = "Comparing...";
+  statusEl.classList.remove("error");
+  resultsEl.classList.add("hidden");
+  resultsBodyEl.innerHTML = "";
 
-  let html = `
-    <table class="matches-table">
-      <thead>
-        <tr>
-          <th>Structured Field</th>
-          <th>Best Unstructured Match</th>
-          <th>Confidence</th>
-          <th>Details</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
+  const structuredFile = document.getElementById("structured").files[0];
+  const unstructuredFile = document.getElementById("unstructured").files[0];
 
-  matches.forEach((m, idx) => {
-    const best = m.best_match || {};
-    const score = best.score ?? 0;
-    const cls = confidenceClass(score);
-    const components = best.components || {};
-    const alt = m.alternatives || [];
-
-    html += `
-      <tr class="${cls}">
-        <td>${m.structured_field}</td>
-        <td>${best.unstructured_field ?? "-"}</td>
-        <td>${score.toFixed(3)}</td>
-        <td>
-          <button class="toggle-details" data-row="${idx}">View</button>
-        </td>
-      </tr>
-      <tr class="details-row" id="details-${idx}" style="display:none;">
-        <td colspan="4">
-          <div class="details-block">
-            <strong>Components</strong><br/>
-            Semantic: ${(components.semantic ?? 0).toFixed(3)}<br/>
-            Fuzzy: ${(components.fuzzy ?? 0).toFixed(3)}<br/>
-            Token Jaccard: ${(components.token_jaccard ?? 0).toFixed(3)}<br/><br/>
-            <strong>Alternatives</strong><br/>
-            ${
-              alt.length === 0
-                ? "None"
-                : `
-              <ul>
-                ${alt
-                  .map(
-                    (a) => `
-                  <li>
-                    ${a.unstructured_field} — score: ${a.score.toFixed(3)}
-                  </li>
-                `
-                  )
-                  .join("")}
-              </ul>
-            `
-            }
-          </div>
-        </td>
-      </tr>
-    `;
-  });
-
-  html += "</tbody></table>";
-  tableContainer.innerHTML = html;
-
-  // Wire up detail toggles
-  document.querySelectorAll(".toggle-details").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const rowId = btn.getAttribute("data-row");
-      const detailsRow = document.getElementById(`details-${rowId}`);
-      if (detailsRow.style.display === "none") {
-        detailsRow.style.display = "table-row";
-        btn.textContent = "Hide";
-      } else {
-        detailsRow.style.display = "none";
-        btn.textContent = "View";
-      }
-    });
-  });
-}
-
-compareButton.addEventListener("click", async () => {
-  const file1 = structuredInput.files[0];
-  const file2 = unstructuredInput.files[0];
-
-  if (!file1 || !file2) {
-    alert("Please select both files.");
+  if (!structuredFile || !unstructuredFile) {
+    statusEl.textContent = "Please select both JSON files.";
+    statusEl.classList.add("error");
     return;
   }
 
   const formData = new FormData();
-  formData.append("file1", file1);
-  formData.append("file2", file2);
-
-  setLoading(true);
-  resultContainer.textContent = "";
-  tableContainer.innerHTML = "";
+  formData.append("structured", structuredFile);
+  formData.append("unstructured", unstructuredFile);
 
   try {
-    const response = await fetch("/compare", {
+    const res = await fetch(`${API_BASE}/compare`, {
       method: "POST",
       body: formData,
     });
 
-    const data = await response.json();
-
-    if (!response.ok || data.error) {
-      resultContainer.textContent =
-        data.error || "An error occurred while comparing.";
+    if (!res.ok) {
+      const text = await res.text();
+      statusEl.textContent = `Server error (${res.status}): ${text}`;
+      statusEl.classList.add("error");
       return;
     }
 
-    resultContainer.textContent = data.message || "Comparison complete.";
-    renderMatches(data.matches);
+    const data = await res.json();
+
+    if (data.error) {
+      statusEl.textContent = data.error;
+      statusEl.classList.add("error");
+      return;
+    }
+
+    statusEl.textContent = "Comparison complete.";
+    overallScoreEl.textContent = data.overall_score;
+
+    data.field_results.forEach((row) => {
+      const tr = document.createElement("tr");
+
+      const tdField = document.createElement("td");
+      tdField.textContent = row.field;
+
+      const tdStruct = document.createElement("td");
+      tdStruct.textContent = row.structured_value;
+
+      const tdUnstruct = document.createElement("td");
+      tdUnstruct.textContent = row.unstructured_value;
+
+      const tdScore = document.createElement("td");
+      tdScore.textContent = row.score;
+
+      tr.appendChild(tdField);
+      tr.appendChild(tdStruct);
+      tr.appendChild(tdUnstruct);
+      tr.appendChild(tdScore);
+
+      resultsBodyEl.appendChild(tr);
+    });
+
+    resultsEl.classList.remove("hidden");
   } catch (err) {
-    console.error(err);
-    resultContainer.textContent = "Network or server error.";
-  } finally {
-    setLoading(false);
+    statusEl.textContent = `Request failed: ${err.message}`;
+    statusEl.classList.add("error");
   }
 });
