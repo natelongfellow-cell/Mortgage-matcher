@@ -1,10 +1,10 @@
+from matcher import SchemaMatcher
 from fastapi import FastAPI, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 import json
 from typing import Any, Dict
-from matcher import SchemaMatcher
 
 app = FastAPI()
 
