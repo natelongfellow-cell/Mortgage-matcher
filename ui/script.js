@@ -1,13 +1,14 @@
 // script.js
 
+console.log("script.js: loaded");
+
 const form = document.getElementById("compare-form");
 const statusEl = document.getElementById("status");
 const resultsEl = document.getElementById("results");
 const overallScoreEl = document.getElementById("overall-score");
 const resultsBodyEl = document.getElementById("results-body");
 
-// CHANGE THIS to your Render URL in production
-// e.g. const API_BASE = "https://mortgage-matcher.onrender.com";
+// Your backend URL
 const API_BASE = "https://mortgage-matcher-1.onrender.com";
 
 form.addEventListener("submit", async (e) => {
@@ -57,22 +58,12 @@ form.addEventListener("submit", async (e) => {
     data.field_results.forEach((row) => {
       const tr = document.createElement("tr");
 
-      const tdField = document.createElement("td");
-      tdField.textContent = row.field;
-
-      const tdStruct = document.createElement("td");
-      tdStruct.textContent = row.structured_value;
-
-      const tdUnstruct = document.createElement("td");
-      tdUnstruct.textContent = row.unstructured_value;
-
-      const tdScore = document.createElement("td");
-      tdScore.textContent = row.score;
-
-      tr.appendChild(tdField);
-      tr.appendChild(tdStruct);
-      tr.appendChild(tdUnstruct);
-      tr.appendChild(tdScore);
+      tr.innerHTML = `
+        <td>${row.field}</td>
+        <td>${row.structured_value}</td>
+        <td>${row.unstructured_value}</td>
+        <td>${row.score}</td>
+      `;
 
       resultsBodyEl.appendChild(tr);
     });
