@@ -1,12 +1,15 @@
-# api.py
-
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import json
-from matcher import compare_json
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+from matcher import compare_documents
 
 app = FastAPI()
 
+# -----------------------------
+# CORS
+# -----------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -15,23 +18,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# -----------------------------
+# Serve UI
+# -----------------------------
+app.mount("/ui", StaticFiles(directory="ui"), name="ui")
+
 @app.get("/")
 def root():
-    return {"status": "Mortgage Matcher API running"}
+    return FileResponse(os.path.join("ui", "index.html"))
 
+# -----------------------------
+# Health Check
+# -----------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+# -----------------------------
+# Compare Endpoint
+# -----------------------------
 @app.post("/compare")
-async def compare(
-    structured: UploadFile = File(...),
-    unstructured: UploadFile = File(...)
-):
+async def compare(doc1: UploadFile = File(...), doc2: UploadFile = File(...)):
     try:
-        structured_bytes = await structured.read()
-        unstructured_bytes = await unstructured.read()
+        text1 = (await doc1.read()).decode("utf-8", errors="ignore")
+        text2 = (await doc2.read()).decode("utf-8", errors="ignore")
 
-        structured_data = json.loads(structured_bytes.decode("utf-8"))
-        unstructured_data = json.loads(unstructured_bytes.decode("utf-8"))
+        result = compare_documents(text1, text2)
+        return {"result": result}
+
     except Exception as e:
-        return {"error": f"Invalid JSON uploaded: {str(e)}"}
-
-    result = compare_json(structured_data, unstructured_data)
-    return result
+        raise HTTPException(status_code=500, detail=str(e))
